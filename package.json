@@ -1,0 +1,46 @@
+{
+  "name": "craops",
+  "version": "0.2.0",
+  "description": "Open-source EU Cyber Resilience Act (CRA) compliance-as-code CLI & GitHub Action: CycloneDX 1.6 SBOM, OSV + CISA KEV vulnerability scan, CSAF 2.0 VEX, Annex VII Technical File starter, and Article 14 ENISA SRP template.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://craops.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devansh2396/cra-audit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/devansh2396/cra-audit/issues"
+  },
+  "files": [
+    "action.yml",
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "craops": "bin/cra-audit.js",
+    "cra-audit": "bin/cra-audit.js"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "eu-cra",
+    "cyber-resilience-act",
+    "sbom",
+    "cyclonedx",
+    "csaf",
+    "vex",
+    "enisa",
+    "compliance",
+    "devsecops"
+  ]
+}

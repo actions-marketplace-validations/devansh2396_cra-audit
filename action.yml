@@ -1,0 +1,65 @@
+name: 'CRAOps EU CRA Audit'
+description: 'Scan repository for EU Cyber Resilience Act readiness, generate CycloneDX 1.6 SBOM, CSAF 2.0 VEX, Annex VII Technical File starter, and Article 14 ENISA SRP template.'
+author: 'CRAOps'
+branding:
+  icon: 'shield'
+  color: 'green'
+inputs:
+  path:
+    description: 'Directory path to scan'
+    required: false
+    default: '.'
+  out-dir:
+    description: 'Output directory for CRA compliance artifacts'
+    required: false
+    default: './cra-artifacts'
+  product-name:
+    description: 'Override product name in SBOM & Technical File'
+    required: false
+    default: ''
+  support-years:
+    description: 'Published CRA support period in years'
+    required: false
+    default: '5'
+  fail-under:
+    description: 'Fail workflow if CRA score is below threshold (0-100)'
+    required: false
+    default: '0'
+  offline:
+    description: 'Skip live OSV.dev CVE queries'
+    required: false
+    default: 'false'
+outputs:
+  score:
+    description: 'EU CRA Readiness Score (0-100)'
+    value: ${{ steps.audit.outputs.score }}
+  grade:
+    description: 'Letter grade (A-D)'
+    value: ${{ steps.audit.outputs.grade }}
+  vuln-count:
+    description: 'Number of OSV vulnerabilities detected'
+    value: ${{ steps.audit.outputs.vuln-count }}
+  sbom-path:
+    description: 'Path to generated CycloneDX 1.6 SBOM JSON'
+    value: ${{ steps.audit.outputs.sbom-path }}
+  report-path:
+    description: 'Path to generated Markdown CRA report'
+    value: ${{ steps.audit.outputs.report-path }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Run cra-audit
+      id: audit
+      shell: bash
+      run: |
+        ARGS=("scan" "${{ inputs.path }}" "--out" "${{ inputs.out-dir }}" "--support-years" "${{ inputs.support-years }}")
+        if [ -n "${{ inputs.product-name }}" ]; then
+          ARGS+=("--product-name" "${{ inputs.product-name }}")
+        fi
+        if [ "${{ inputs.offline }}" = "true" ]; then
+          ARGS+=("--offline")
+        fi
+        if [ "${{ inputs.fail-under }}" != "0" ] && [ -n "${{ inputs.fail-under }}" ]; then
+          ARGS+=("--fail-under" "${{ inputs.fail-under }}")
+        fi
+        node "${{ github.action_path }}/bin/cra-audit.js" "${ARGS[@]}"
