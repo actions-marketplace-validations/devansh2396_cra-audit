@@ -48,7 +48,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`craops v0.2.0 — EU Cyber Resilience Act (CRA) Compliance-as-Code CLI
+  console.log(`craops v0.3.0 — EU Cyber Resilience Act (CRA) Compliance-as-Code CLI
 
 Usage:
   npx craops scan [dir] [options]

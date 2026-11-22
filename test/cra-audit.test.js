@@ -12,6 +12,8 @@ import {
   parseGoMod,
   parseCargoToml,
   parseComposerJson,
+  parsePomXml,
+  parseGradle,
   scanRepositoryDir,
 } from '../src/parsers.js';
 import { generateCycloneDX, generateCsafVex } from '../src/sbom.js';
@@ -66,6 +68,47 @@ test('discovers workspace monorepo manifests when root package.json has zero dep
   const scan = scanRepositoryDir(tmpDir);
   assert.equal(scan.components.length, 2);
   assert.ok(scan.meta.manifests.some((m) => m.startsWith('workspace-manifests')));
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test('parses Maven pom.xml, Gradle build files, and nested app/server + app/client modules', () => {
+  const pomComps = parsePomXml(`
+    <project>
+      <properties><spring.version>3.3.4</spring.version></properties>
+      <dependencies>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId><version>\${spring.version}</version></dependency>
+        <dependency><groupId>junit</groupId><artifactId>junit</artifactId><version>4.13.2</version><scope>test</scope></dependency>
+      </dependencies>
+    </project>
+  `);
+  assert.equal(pomComps.length, 1);
+  assert.equal(pomComps[0].ecosystem, 'Maven');
+  assert.equal(pomComps[0].purl, 'pkg:maven/org.springframework.boot/spring-boot-starter-web@3.3.4');
+
+  const gradleComps = parseGradle(`
+    dependencies {
+      implementation("io.netty:netty-all:4.1.114.Final")
+      api 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+      testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    }
+  `);
+  assert.equal(gradleComps.length, 2);
+  assert.equal(gradleComps[1].purl, 'pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.17.2');
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cra-nested-maven-'));
+  fs.mkdirSync(path.join(tmpDir, 'app', 'server'), { recursive: true });
+  fs.mkdirSync(path.join(tmpDir, 'app', 'client'), { recursive: true });
+  fs.writeFileSync(
+    path.join(tmpDir, 'app', 'server', 'pom.xml'),
+    `<project><dependencies><dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><version>42.7.4</version></dependency></dependencies></project>`,
+  );
+  fs.writeFileSync(
+    path.join(tmpDir, 'app', 'client', 'package.json'),
+    JSON.stringify({ name: 'client', dependencies: { react: '19.0.0' } }),
+  );
+  const nestedScan = scanRepositoryDir(tmpDir);
+  assert.equal(nestedScan.components.length, 2);
+  assert.ok(nestedScan.meta.manifests.some((m) => m.startsWith('workspace-manifests(2)')));
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 

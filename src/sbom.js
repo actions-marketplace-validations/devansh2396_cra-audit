@@ -16,8 +16,8 @@ export function generateCycloneDX(meta, components) {
         components: [
           {
             type: 'application',
-            name: 'cra-audit',
-            version: '0.1.0',
+            name: 'craops',
+            version: '0.3.0',
             publisher: 'CRAOps',
           },
         ],

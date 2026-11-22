@@ -397,6 +397,69 @@ export function parseComposerLock(content) {
   }
 }
 
+export function parsePomXml(content) {
+  const comps = [];
+  const seen = new Set();
+  const props = {};
+  const propsBlock = content.match(/<properties>([\s\S]*?)<\/properties>/i);
+  if (propsBlock) {
+    for (const pm of propsBlock[1].matchAll(/<([A-Za-z0-9_.-]+)>([^<]+)<\/\1>/g)) {
+      props[pm[1].trim()] = pm[2].trim();
+    }
+  }
+  const depMatches = content.matchAll(/<dependency>([\s\S]*?)<\/dependency>/gi);
+  for (const dm of depMatches) {
+    const block = dm[1];
+    const scopeMatch = block.match(/<scope>\s*([^<]+?)\s*<\/scope>/i);
+    if (scopeMatch && scopeMatch[1].trim().toLowerCase() === 'test') continue;
+    const gMatch = block.match(/<groupId>\s*([^<]+?)\s*<\/groupId>/i);
+    const aMatch = block.match(/<artifactId>\s*([^<]+?)\s*<\/artifactId>/i);
+    if (!gMatch || !aMatch) continue;
+    const groupId = gMatch[1].trim();
+    const artifactId = aMatch[1].trim();
+    const vMatch = block.match(/<version>\s*([^<]+?)\s*<\/version>/i);
+    let version = vMatch ? vMatch[1].trim() : 'unknown';
+    const propRef = version.match(/^\$\{([^}]+)\}$/);
+    if (propRef && props[propRef[1]]) version = props[propRef[1]];
+    if (version.startsWith('${')) version = 'unknown';
+    const name = `${groupId}:${artifactId}`;
+    const key = `${name}@${version}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    comps.push({
+      name,
+      version,
+      ecosystem: 'Maven',
+      purl: `pkg:maven/${groupId}/${artifactId}${version !== 'unknown' ? `@${version}` : ''}`,
+      direct: true,
+    });
+  }
+  return comps;
+}
+
+export function parseGradle(content) {
+  const comps = [];
+  const seen = new Set();
+  const re =
+    /\b(?:implementation|api|compileOnly|runtimeOnly|classpath)\s*(?:\(\s*)?["']([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+):([^"')\s]+)["']\s*\)?/g;
+  for (const m of content.matchAll(re)) {
+    const [, groupId, artifactId, rawVer] = m;
+    const version = rawVer.startsWith('$') ? 'unknown' : rawVer;
+    const name = `${groupId}:${artifactId}`;
+    const key = `${name}@${version}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    comps.push({
+      name,
+      version,
+      ecosystem: 'Maven',
+      purl: `pkg:maven/${groupId}/${artifactId}${version !== 'unknown' ? `@${version}` : ''}`,
+      direct: true,
+    });
+  }
+  return comps;
+}
+
 function mergeComponents(primary, secondary) {
   const map = new Map();
   for (const item of [...secondary, ...primary]) {
@@ -410,27 +473,46 @@ function mergeComponents(primary, secondary) {
   return Array.from(map.values());
 }
 
-function discoverWorkspacePackageJsons(absDir, limit = 20) {
-  const results = [];
-  for (const parent of ['apps', 'packages']) {
-    const parentPath = path.join(absDir, parent);
-    if (!fs.existsSync(parentPath) || !fs.statSync(parentPath).isDirectory()) continue;
+const SKIP_DIRS = new Set(['node_modules', '.git', 'target', 'build', 'dist', '.next', 'vendor', '.venv']);
+const NESTED_MANIFEST_NAMES = [
+  'package.json',
+  'pom.xml',
+  'build.gradle',
+  'build.gradle.kts',
+  'go.mod',
+  'Cargo.toml',
+  'requirements.txt',
+  'pyproject.toml',
+  'composer.json',
+  'mix.exs',
+];
+
+function discoverNestedManifests(absDir, limit = 30) {
+  const found = [];
+  function walk(dir, depth) {
+    if (depth > 2 || found.length >= limit) return;
     let entries = [];
     try {
-      entries = fs.readdirSync(parentPath, { withFileTypes: true });
+      entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
-      continue;
+      return;
     }
     for (const ent of entries) {
-      if (!ent.isDirectory()) continue;
-      const candidate = path.join(parentPath, ent.name, 'package.json');
-      if (fs.existsSync(candidate)) {
-        results.push(candidate);
-        if (results.length >= limit) return results;
+      if (found.length >= limit) return;
+      if (!ent.isDirectory() || ent.name.startsWith('.') || SKIP_DIRS.has(ent.name)) continue;
+      const subDir = path.join(dir, ent.name);
+      for (const fileName of NESTED_MANIFEST_NAMES) {
+        const candidate = path.join(subDir, fileName);
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+          found.push({ filePath: candidate, fileName, relPath: path.relative(absDir, candidate) });
+          if (found.length >= limit) return;
+        }
       }
+      walk(subDir, depth + 1);
     }
   }
-  return results;
+  walk(absDir, 1);
+  return found;
 }
 
 export function scanRepositoryDir(targetDir, overrides = {}) {
@@ -451,21 +533,6 @@ export function scanRepositoryDir(targetDir, overrides = {}) {
     const parsed = parsePackageJson(pkgJsonText);
     pkgMeta = parsed.meta;
     components = mergeComponents(components, parsed.components);
-  }
-
-  const isMonorepo = Boolean(pkgMeta.hasWorkspaces || fs.existsSync(path.join(absDir, 'pnpm-workspace.yaml')));
-  if (isMonorepo) {
-    const wsFiles = discoverWorkspacePackageJsons(absDir, 20);
-    for (const wsPath of wsFiles) {
-      const wsText = safeReadText(wsPath);
-      if (wsText) {
-        const parsed = parsePackageJson(wsText);
-        components = mergeComponents(components, parsed.components);
-      }
-    }
-    if (wsFiles.length > 0 && !manifests.includes('workspace-manifests')) {
-      manifests.push(`workspace-manifests(${wsFiles.length})`);
-    }
   }
 
   const pkgLockText = safeReadText(pkgLockPath);
@@ -536,6 +603,50 @@ export function scanRepositoryDir(targetDir, overrides = {}) {
   if (composerLockText) {
     lockfiles.push('composer.lock');
     components = mergeComponents(components, parseComposerLock(composerLockText));
+  }
+
+  const pomXmlText = safeReadText(path.join(absDir, 'pom.xml'));
+  if (pomXmlText) {
+    manifests.push('pom.xml');
+    components = mergeComponents(components, parsePomXml(pomXmlText));
+  }
+  for (const gradleName of ['build.gradle', 'build.gradle.kts']) {
+    const gradleText = safeReadText(path.join(absDir, gradleName));
+    if (gradleText) {
+      manifests.push(gradleName);
+      components = mergeComponents(components, parseGradle(gradleText));
+    }
+  }
+  if (fs.existsSync(path.join(absDir, 'gradle.lockfile'))) {
+    lockfiles.push('gradle.lockfile');
+  }
+
+  const isMonorepoOrSparse =
+    Boolean(pkgMeta.hasWorkspaces || fs.existsSync(path.join(absDir, 'pnpm-workspace.yaml'))) || components.length === 0;
+  if (isMonorepoOrSparse) {
+    const nested = discoverNestedManifests(absDir, 30);
+    let nestedCount = 0;
+    for (const item of nested) {
+      const txt = safeReadText(item.filePath);
+      if (!txt) continue;
+      let parsedComps = [];
+      if (item.fileName === 'package.json') parsedComps = parsePackageJson(txt).components;
+      else if (item.fileName === 'pom.xml') parsedComps = parsePomXml(txt);
+      else if (item.fileName === 'build.gradle' || item.fileName === 'build.gradle.kts') parsedComps = parseGradle(txt);
+      else if (item.fileName === 'go.mod') parsedComps = parseGoMod(txt);
+      else if (item.fileName === 'Cargo.toml') parsedComps = parseCargoToml(txt);
+      else if (item.fileName === 'requirements.txt') parsedComps = parseRequirementsTxt(txt);
+      else if (item.fileName === 'pyproject.toml') parsedComps = parsePyprojectToml(txt);
+      else if (item.fileName === 'composer.json') parsedComps = parseComposerJson(txt);
+      else if (item.fileName === 'mix.exs') parsedComps = parseMixExs(txt);
+      if (parsedComps.length > 0) {
+        nestedCount += 1;
+        components = mergeComponents(components, parsedComps);
+      }
+    }
+    if (nestedCount > 0 && !manifests.some((m) => m.startsWith('workspace-manifests'))) {
+      manifests.push(`workspace-manifests(${nestedCount})`);
+    }
   }
 
   const securityCandidates = [
