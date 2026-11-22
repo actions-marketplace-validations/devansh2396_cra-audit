@@ -14,6 +14,7 @@ import {
   parseComposerJson,
   parsePomXml,
   parseGradle,
+  parseDockerfile,
   scanRepositoryDir,
 } from '../src/parsers.js';
 import { generateCycloneDX, generateCsafVex } from '../src/sbom.js';
@@ -185,8 +186,44 @@ test('runAudit writes all 7 artifacts in offline mode for fixture directory', as
     'annex-vii-technical-file-starter.md',
     'eu-declaration-of-conformity-draft.md',
     'enisa-srp-24h-template.json',
+    'SECURITY.cra-draft.md',
   ]) {
     assert.ok(fs.existsSync(path.join(outDir, fname)), `Missing ${fname}`);
   }
+  const secDraft = fs.readFileSync(path.join(outDir, 'SECURITY.cra-draft.md'), 'utf8');
+  assert.match(secDraft, /Article 13\(8\)/);
+  assert.match(secDraft, /5 years/);
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test('parses Dockerfile base images for floating/EOL tags and 2-part BOM Gradle modules', () => {
+  const dockerRes = parseDockerfile(`
+    ARG BASE_TAG=18-alpine
+    FROM node:\${BASE_TAG} AS builder
+    FROM alpine:latest
+  `);
+  assert.equal(dockerRes.images.length, 2);
+  assert.equal(dockerRes.images[0].isEol, true);
+  assert.equal(dockerRes.images[1].isFloating, true);
+  assert.equal(dockerRes.findings.length, 2);
+
+  const bomGradle = parseGradle(`
+    dependencies {
+      implementation "io.micronaut:micronaut-http-server-netty"
+      api 'com.github.ksuid:ksuid:1.1.4'
+    }
+  `);
+  assert.equal(bomGradle.length, 2);
+  assert.equal(bomGradle[1].name, 'io.micronaut:micronaut-http-server-netty');
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cra-gradle-docker-'));
+  fs.writeFileSync(path.join(tmpDir, 'settings.gradle'), "include 'core'");
+  fs.writeFileSync(path.join(tmpDir, 'Dockerfile'), 'FROM ubuntu:20.04\n');
+  fs.mkdirSync(path.join(tmpDir, 'core'), { recursive: true });
+  fs.writeFileSync(path.join(tmpDir, 'core', 'build.gradle'), 'implementation "io.projectreactor:reactor-core"');
+  const scan = scanRepositoryDir(tmpDir);
+  assert.equal(scan.components.length, 1);
+  assert.equal(scan.meta.containerImages.length, 1);
+  assert.equal(scan.meta.containerImages[0].isEol, true);
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });

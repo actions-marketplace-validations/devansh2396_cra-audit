@@ -48,13 +48,13 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`craops v0.3.0 — EU Cyber Resilience Act (CRA) Compliance-as-Code CLI
+  console.log(`craops v0.4.0 — EU Cyber Resilience Act (CRA) Compliance-as-Code CLI
 
 Usage:
   npx craops scan [dir] [options]
 
 Options:
-  --out <dir>              Write 7 CRA evidence artifacts (SBOM, CSAF VEX, Annex VII, ENISA SRP)
+  --out <dir>              Write 8 CRA evidence artifacts (SBOM, CSAF VEX, Annex VII, ENISA SRP, SECURITY.md draft)
   --offline                Skip live OSV.dev vulnerability lookups
   --json                   Output machine-readable JSON summary to stdout
   --product-name <name>    Override detected product name
@@ -99,7 +99,7 @@ async function main() {
       }
     }
     if (flags.outDir) {
-      console.log(`\nWrote 7 CRA artifacts to ${path.resolve(flags.outDir)}`);
+      console.log(`\nWrote 8 CRA artifacts to ${path.resolve(flags.outDir)}`);
     }
   }
 

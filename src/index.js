@@ -9,6 +9,7 @@ import {
   renderAnnexViiStarterMarkdown,
   renderDeclarationOfConformityDraft,
   generateEnisaSrpTemplate,
+  renderSecurityMdDraft,
 } from './generators.js';
 
 export async function runAudit(targetDir, options = {}) {
@@ -33,6 +34,7 @@ export async function runAudit(targetDir, options = {}) {
   const annexViiMd = renderAnnexViiStarterMarkdown(scan);
   const declarationMd = renderDeclarationOfConformityDraft(meta);
   const enisaTemplate = generateEnisaSrpTemplate(meta, osv);
+  const securityMdDraft = renderSecurityMdDraft(meta);
 
   const reportJson = {
     schema: 'craops.audit-report.v1',
@@ -54,6 +56,7 @@ export async function runAudit(targetDir, options = {}) {
     fs.writeFileSync(path.join(out, 'annex-vii-technical-file-starter.md'), annexViiMd, 'utf8');
     fs.writeFileSync(path.join(out, 'eu-declaration-of-conformity-draft.md'), declarationMd, 'utf8');
     fs.writeFileSync(path.join(out, 'enisa-srp-24h-template.json'), JSON.stringify(enisaTemplate, null, 2), 'utf8');
+    fs.writeFileSync(path.join(out, 'SECURITY.cra-draft.md'), securityMdDraft, 'utf8');
   }
 
   return {
@@ -64,6 +67,7 @@ export async function runAudit(targetDir, options = {}) {
     annexViiMd,
     declarationMd,
     enisaTemplate,
+    securityMdDraft,
   };
 }
 
@@ -73,4 +77,5 @@ export {
   generateCycloneDX,
   generateCsafVex,
   scoreCraReadiness,
+  renderSecurityMdDraft,
 };

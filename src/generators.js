@@ -125,3 +125,21 @@ export function generateEnisaSrpTemplate(meta, osv) {
     },
   };
 }
+
+export function renderSecurityMdDraft(meta) {
+  const email = meta.securityEmail || 'security@your-company.com';
+  const supportYears = Number(meta.supportYears || 5);
+  return `# Security Policy & EU CRA Vulnerability Disclosure — ${meta.productName}
+
+## Coordinated Vulnerability Disclosure (EU CRA Article 13(6))
+- **Security Contact:** ${email}
+- **Initial Acknowledgement SLA:** Within 24 hours of receipt (aligned with ENISA Single Reporting Platform Article 14 early-warning triage).
+- **Technical Assessment & Fix Timeline:** Confirmed critical/high issues receive a triage update within 72 hours and a coordinated patch or CSAF 2.0 VEX advisory prior to public disclosure.
+- **Safe Harbor:** Good-faith security research following this policy will not trigger legal action.
+
+## Supported Versions & Support Period (EU CRA Article 13(8))
+- **Active Release Series:** \`${meta.productVersion}\`
+- **Minimum Security Support Period:** **${supportYears} years** from initial market placement of each supported major release series.
+- **End-of-Life (EOL) Notice:** At least 6 months prior notice before a release line ceases receiving security updates.
+`;
+}

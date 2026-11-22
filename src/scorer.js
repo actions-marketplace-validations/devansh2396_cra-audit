@@ -59,6 +59,11 @@ export function scoreCraReadiness(meta, components, osvResult) {
 
   if (meta.productVersion && meta.productVersion !== '0.1.0') docScore += 4;
   else docScore += 2;
+  if (Array.isArray(meta.containerFindings) && meta.containerFindings.length > 0) {
+    for (const cf of meta.containerFindings.slice(0, 3)) {
+      annexVIIGaps.push(cf);
+    }
+  }
   breakdown.push({ area: 'Support Period & Technical File Baseline', score: docScore, max: 15 });
 
   // 5. CI/CD Release & Security Automation (15 pts)

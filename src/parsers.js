@@ -440,9 +440,9 @@ export function parsePomXml(content) {
 export function parseGradle(content) {
   const comps = [];
   const seen = new Set();
-  const re =
+  const threePartRe =
     /\b(?:implementation|api|compileOnly|runtimeOnly|classpath)\s*(?:\(\s*)?["']([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+):([^"')\s]+)["']\s*\)?/g;
-  for (const m of content.matchAll(re)) {
+  for (const m of content.matchAll(threePartRe)) {
     const [, groupId, artifactId, rawVer] = m;
     const version = rawVer.startsWith('$') ? 'unknown' : rawVer;
     const name = `${groupId}:${artifactId}`;
@@ -457,7 +457,75 @@ export function parseGradle(content) {
       direct: true,
     });
   }
+  const twoPartRe =
+    /\b(?:implementation|api|compileOnly|runtimeOnly|classpath)\s*(?:\(\s*)?["']([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+)["']\s*\)?/g;
+  for (const m of content.matchAll(twoPartRe)) {
+    const [, groupId, artifactId] = m;
+    const name = `${groupId}:${artifactId}`;
+    if ([...seen].some((k) => k.startsWith(`${name}@`))) continue;
+    seen.add(`${name}@unknown`);
+    comps.push({
+      name,
+      version: 'unknown',
+      ecosystem: 'Maven',
+      purl: `pkg:maven/${groupId}/${artifactId}`,
+      direct: true,
+    });
+  }
   return comps;
+}
+
+const EOL_CONTAINER_PATTERNS = [
+  { re: /^node:(?:14|16|18)(?:[.-]|$)/i, reason: 'Node.js <=18 has reached End-of-Life (upgrade to Node 20/22 LTS)' },
+  { re: /^python:(?:3\.7|3\.8|3\.9)(?:[.-]|$)/i, reason: 'Python <=3.9 is EOL or nearing end of security fixes' },
+  { re: /^ubuntu:(?:18\.04|20\.04|bionic|focal)(?:[.-]|$)/i, reason: 'Ubuntu <=20.04 LTS standard support ended (upgrade to 22.04/24.04)' },
+  { re: /^debian:(?:stretch|buster|9|10)(?:[.-]|$)/i, reason: 'Debian <=10 (buster) is End-of-Life' },
+  { re: /^alpine:(?:3\.14|3\.15|3\.16|3\.17)(?:[.-]|$)/i, reason: 'Alpine <=3.17 is End-of-Life' },
+  { re: /^(?:openjdk|eclipse-temurin):(?:8|11)(?:[.-]|$)/i, reason: 'Legacy Java 8/11 base image — verify commercial LTS security patch stream' },
+];
+
+export function parseDockerfile(content, sourcePath = 'Dockerfile') {
+  const args = {};
+  for (const rawLine of content.split(/\r?\n/)) {
+    const m = rawLine.trim().match(/^ARG\s+([A-Za-z_][A-Za-z0-9_]*)=["']?([^"'\s#]+)["']?/i);
+    if (m) args[m[1]] = m[2];
+  }
+  const images = [];
+  const findings = [];
+  const seen = new Set();
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const fromMatch = line.match(/^FROM\s+(?:--platform=[^\s]+\s+)?([^\s]+)(?:\s+AS\s+[^\s]+)?/i);
+    if (!fromMatch) continue;
+    let ref = fromMatch[1].replace(/\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?/g, (_, k) => args[k] || '');
+    if (!ref || ref === 'scratch' || seen.has(ref)) continue;
+    seen.add(ref);
+
+    const hasDigest = ref.includes('@sha256:');
+    const lastColon = ref.lastIndexOf(':');
+    const lastSlash = ref.lastIndexOf('/');
+    const tag = !hasDigest && lastColon > lastSlash ? ref.slice(lastColon + 1) : hasDigest ? 'sha256-pinned' : 'untagged';
+    const isFloating = !hasDigest && (tag === 'latest' || tag === 'untagged' || /^latest-/i.test(tag));
+    const eolHit = EOL_CONTAINER_PATTERNS.find((p) => p.re.test(ref));
+
+    images.push({
+      source: sourcePath,
+      image: ref,
+      tag,
+      isFloating,
+      isEol: Boolean(eolHit),
+      reason: eolHit ? eolHit.reason : isFloating ? 'Floating or untagged base image prevents deterministic CRA Annex VII SBOM reproducibility' : 'Pinned base tag',
+    });
+
+    if (eolHit) {
+      findings.push(`Container base image \`${ref}\` in ${sourcePath}: ${eolHit.reason}.`);
+    } else if (isFloating) {
+      findings.push(`Container base image \`${ref}\` in ${sourcePath} uses a floating/unpinned tag — pin an explicit version or sha256 digest for CRA Annex VII reproducibility.`);
+    }
+  }
+  return { images, findings };
 }
 
 function mergeComponents(primary, secondary) {
@@ -622,7 +690,10 @@ export function scanRepositoryDir(targetDir, overrides = {}) {
   }
 
   const isMonorepoOrSparse =
-    Boolean(pkgMeta.hasWorkspaces || fs.existsSync(path.join(absDir, 'pnpm-workspace.yaml'))) || components.length === 0;
+    Boolean(pkgMeta.hasWorkspaces || fs.existsSync(path.join(absDir, 'pnpm-workspace.yaml'))) ||
+    fs.existsSync(path.join(absDir, 'settings.gradle')) ||
+    fs.existsSync(path.join(absDir, 'settings.gradle.kts')) ||
+    components.length < 5;
   if (isMonorepoOrSparse) {
     const nested = discoverNestedManifests(absDir, 30);
     let nestedCount = 0;
@@ -703,7 +774,20 @@ export function scanRepositoryDir(targetDir, overrides = {}) {
       (securityMdText && /\b(supported versions|support period|end[- ]of[- ]life|eol|\d+\s+years?)\b/i.test(securityMdText)),
   );
 
+  const dockerCandidates = ['Dockerfile', path.join('docker', 'Dockerfile')];
+  const containerImages = [];
+  const containerFindings = [];
+  for (const relDocker of dockerCandidates) {
+    const dockerText = safeReadText(path.join(absDir, relDocker), 200_000);
+    if (dockerText) {
+      const parsedDocker = parseDockerfile(dockerText, relDocker);
+      containerImages.push(...parsedDocker.images);
+      containerFindings.push(...parsedDocker.findings);
+    }
+  }
+
   const hasDockerfile =
+    containerImages.length > 0 ||
     fs.existsSync(path.join(absDir, 'Dockerfile')) ||
     fs.existsSync(path.join(absDir, 'docker-compose.yml')) ||
     fs.existsSync(path.join(absDir, 'docker-compose.yaml'));
@@ -719,6 +803,8 @@ export function scanRepositoryDir(targetDir, overrides = {}) {
       license: pkgMeta.license || (licenseFile ? `Declared (${licenseFile})` : null),
       hasLicenseFile: Boolean(licenseFile || pkgMeta.license),
       hasDockerfile,
+      containerImages,
+      containerFindings,
       hasCliOrBinary: Boolean(pkgMeta.hasBin),
       manifests,
       lockfiles,

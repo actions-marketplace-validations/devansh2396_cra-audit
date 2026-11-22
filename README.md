@@ -5,7 +5,8 @@ Zero-dependency Node.js 20+ CLI and GitHub Action that turns your repository int
 - **CycloneDX 1.6 SBOM** (`sbom.cdx.json`) across npm (`package.json`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, workspace sub-manifests), PyPI, Go, Rust (`Cargo.lock`), PHP (`composer.lock`), and Elixir (`mix.exs` / `mix.lock`)
 - **Live OSV.dev + CISA KEV Check** mapped to **Article 14 ENISA Single Reporting Platform (live since Sept 11, 2026)**
 - **CSAF 2.0 VEX Dossier** (`vex.csaf.json`) ready for exploitability triage
-- **Annex VII Technical File Starter** (`annex-vii-technical-file-starter.md`) & **Module A EU Declaration of Conformity Draft** (`eu-declaration-of-conformity-draft.md`)
+- **Annex VII Technical File Starter** (`annex-vii-technical-file-starter.md`), **Module A EU Declaration of Conformity Draft** (`eu-declaration-of-conformity-draft.md`), and **Article 13(6)/13(8) VDP Draft** (`SECURITY.cra-draft.md`)
+- **Container Base-Image Check** (`Dockerfile` floating `:latest` & EOL OS detection)
 - **24h / 72h / 14d ENISA SRP Incident Template** (`enisa-srp-24h-template.json`)
 - **Deterministic 0–100 CRA Readiness Score**
 

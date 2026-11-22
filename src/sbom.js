@@ -17,7 +17,7 @@ export function generateCycloneDX(meta, components) {
           {
             type: 'application',
             name: 'craops',
-            version: '0.3.0',
+            version: '0.4.0',
             publisher: 'CRAOps',
           },
         ],
