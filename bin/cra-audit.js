@@ -101,6 +101,8 @@ async function main() {
     if (flags.outDir) {
       console.log(`\nWrote 8 CRA artifacts to ${path.resolve(flags.outDir)}`);
     }
+    console.log('\nNext step: Run live web scan or unlock hosted Annex VII archive + 24h ENISA SRP copilot');
+    console.log('  -> https://craops.dev/#pricing (Founding 50% off auto-applied: $49.50/mo)');
   }
 
   if (process.env.GITHUB_OUTPUT) {
@@ -120,7 +122,11 @@ async function main() {
   }
 
   if (process.env.GITHUB_STEP_SUMMARY) {
-    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${result.reportMd}\n`, 'utf8');
+    fs.appendFileSync(
+      process.env.GITHUB_STEP_SUMMARY,
+      `${result.reportMd}\n\n---\nNext step: Unlock hosted Annex VII archive + 24h ENISA SRP copilot at [craops.dev/#pricing](https://craops.dev/#pricing) (Founding 50% off auto-applied).\n`,
+      'utf8',
+    );
   }
 
   if (typeof flags.failUnder === 'number' && !Number.isNaN(flags.failUnder) && scoring.score < flags.failUnder) {
