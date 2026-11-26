@@ -1,5 +1,5 @@
 name: 'CRAOps EU CRA Audit'
-description: 'Scan repository for EU Cyber Resilience Act readiness, generate CycloneDX 1.6 SBOM, CSAF 2.0 VEX, Annex VII Technical File starter, and Article 14 ENISA SRP template.'
+description: 'Audit repos for EU CRA readiness: CycloneDX 1.6 SBOM, CSAF 2.0 VEX, Annex VII Technical File & 24h ENISA SRP.'
 author: 'CRAOps'
 branding:
   icon: 'shield'

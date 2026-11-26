@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run CRAOps cra-audit
-        uses: devansh2396/cra-audit@v0.4.1
+        uses: devansh2396/cra-audit@v0.4.2
         with:
           out-dir: ./cra-artifacts
           support-years: '5'
@@ -52,6 +52,6 @@ jobs:
 Pure browser-only SaaS with no distributed client software generally sits outside CRA (under NIS2), **while** commercial desktop/Electron/mobile apps, browser/IDE/Shopify/Jira plugins, CLIs/SDKs, self-hosted/on-prem software, connected IoT firmware, custom APIs powering client apps ("Remote Data Processing Solutions"), and monetized open-source fall **in scope** with full CE-marking due **December 11, 2027**.
 
 ## Need Continuous ENISA 24h Triage, Hosted VDP & 10-Year Archive?
-Run the live browser diagnostic, public GitHub scanner, and 24h ENISA SRP Dossier Builder at **https://craops.dev**, or start a hosted Starter, Growth, or Scale plan from **$49.50/mo** (`FOUNDING50` auto-applied for 50% off) at **https://craops.dev/#pricing** (`futurewealth.ailab@gmail.com`).
+Run the live browser diagnostic, public GitHub scanner, and 24h ENISA SRP Dossier Builder at **https://craops.dev**, or start a hosted Starter, Growth, or Scale plan from **$49.50/mo** (`FOUNDING50` auto-applied for 50% off) at **https://craops.dev/#pricing** (`devansh@craops.dev`).
 
 > *Legal Notice: `craops` (`cra-audit`) provides engineering automation and technical evidence templates. It does not constitute legal advice or a Notified Body conformity assessment.*
